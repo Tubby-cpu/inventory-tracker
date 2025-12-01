@@ -10,13 +10,13 @@ DB_PATH = "inventory.db"
 
 # ====================== USERS ======================
 USERS = {
-   "capetown":    {"password": hashlib.sha256("capetown".encode()).hexdigest(),    "role": "user", "clinic": "Cape Town"},
-    "sandton":     {"password": hashlib.sha256("sandton".encode()).hexdigest(),     "role": "user", "clinic": "Sandton"},
-    "marshall":    {"password": hashlib.sha256("marshall".encode()).hexdigest(),    "role": "user", "clinic": "Marshall Town"},
-    "gqberha":     {"password": hashlib.sha256("gqberha".encode()).hexdigest(),     "role": "user", "clinic": "Gqberha"},
-    "sandton2":    {"password": hashlib.sha256("sandton2".encode()).hexdigest(),    "role": "user", "clinic": "Sandton 2"},
-    "pretoria":    {"password": hashlib.sha256("pretoria".encode()).hexdigest(),    "role": "user", "clinic": "Pretoria"},
-    "admin":       {"password": hashlib.sha256("admin123".encode()).hexdigest(),    "role": "admin", "clinic": "All"},
+    "capetown": {"password": hashlib.sha256("capetown".encode()).hexdigest(), "role": "user", "clinic": "Cape Town"},
+    "sandton": {"password": hashlib.sha256("sandton".encode()).hexdigest(), "role": "user", "clinic": "Sandton"},
+    "marshall": {"password": hashlib.sha256("marshall".encode()).hexdigest(), "role": "user", "clinic": "Marshall Town"},
+    "gqberha": {"password": hashlib.sha256("gqberha".encode()).hexdigest(), "role": "user", "clinic": "Gqberha"},
+    "sandton2": {"password": hashlib.sha256("sandton2".encode()).hexdigest(), "role": "user", "clinic": "Sandton 2"},
+    "pretoria": {"password": hashlib.sha256("pretoria".encode()).hexdigest(), "role": "user", "clinic": "Pretoria"},
+    "admin": {"password": hashlib.sha256("admin123".encode()).hexdigest(), "role": "admin", "clinic": "All"},
 }
 
 # ====================== DATABASE ======================
@@ -71,7 +71,7 @@ if st.sidebar.button("Logout"):
     st.session_state.clear()
     st.rerun()
 
-# ====================== HELPERS ======================
+# ====================== ALWAYS FRESH DATA ======================
 def get_df(clinic_filter=None):
     conn = sqlite3.connect(DB_PATH)
     if clinic_filter and clinic_filter != "All":
@@ -102,14 +102,14 @@ if role == "admin":
 else:
     selected_clinic = user_clinic
 
+# This line forces fresh data every single time
 df = get_df("All" if (role == "admin" and selected_clinic == "All") else selected_clinic)
 
 tab1, tab2, tab3, tab4 = st.tabs(["Current Stock", "Receive Stock", "Issue Stock", "Reports"])
 
-# ───── TAB 1: CURRENT STOCK (FIXED FOREVER) ─────
+# ───── TAB 1: CURRENT STOCK ─────
 with tab1:
     st.subheader(f"Stock – {selected_clinic}")
-
     if df.empty:
         col1, col2, col3 = st.columns(3)
         col1.metric("Expired", 0); col2.metric("Near Expiry", 0); col3.metric("Low Stock", 0)
@@ -117,31 +117,25 @@ with tab1:
     else:
         today = pd.to_datetime("today").normalize()
         df["days_to_expiry"] = (df["expiry_date"] - today).dt.days
-
-        # Calculate status safely
         df["status"] = "normal"
         df.loc[df["quantity"] <= df["low_stock_threshold"], "status"] = "low_stock"
         df.loc[df["days_to_expiry"] <= 90, "status"] = "near_expiry"
         df.loc[df["days_to_expiry"] <= 0, "status"] = "expired"
 
-        # Metrics
         c1, c2, c3 = st.columns(3)
         c1.metric("Expired", len(df[df["status"] == "expired"]))
         c2.metric("Near Expiry (<90 days)", len(df[df["status"] == "near_expiry"]))
         c3.metric("Low Stock", len(df[df["status"] == "low_stock"]))
 
-        # Prepare display dataframe and keep status for coloring
         display = df[["drug_name", "generic_name", "strength", "batch_no", "expiry_date", "quantity", "low_stock_threshold"]].copy()
         display["expiry_date"] = display["expiry_date"].dt.strftime("%Y-%m-%d")
-
-        # THIS IS THE FIX: pass the status as a separate list that matches display rows
         status_list = df["status"].tolist()
 
         def highlight_row(row):
             status = status_list[row.name]
-            if status == "expired":     return ["background: #ffcccc"] * len(row)
+            if status == "expired": return ["background: #ffcccc"] * len(row)
             if status == "near_expiry": return ["background: #ffffcc"] * len(row)
-            if status == "low_stock":   return ["background: #ffcc99"] * len(row)
+            if status == "low_stock": return ["background: #ffcc99"] * len(row)
             return [""] * len(row)
 
         st.dataframe(display.style.apply(highlight_row, axis=1), use_container_width=True)
@@ -151,11 +145,11 @@ with tab2:
     st.subheader("Receive New Stock")
     with st.form("receive"):
         drug_name = st.text_input("Drug Name *")
-        generic   = st.text_input("Generic Name (optional)")
-        strength  = st.text_input("Strength e.g. 500mg")
-        batch     = st.text_input("Batch Number *")
-        expiry    = st.date_input("Expiry Date", min_value=datetime.today())
-        qty       = st.number_input("Quantity", min_value=1)
+        generic = st.text_input("Generic Name (optional)")
+        strength = st.text_input("Strength e.g. 500mg")
+        batch = st.text_input("Batch Number *")
+        expiry = st.date_input("Expiry Date", min_value=datetime.today())
+        qty = st.number_input("Quantity", min_value=1)
         threshold = st.number_input("Low-stock alert", value=20)
         submitted = st.form_submit_button("Add Stock")
         if submitted:
@@ -175,7 +169,7 @@ with tab2:
                 st.balloons()
                 st.rerun()
 
-# ───── TAB 3: ISSUE STOCK ─────
+# ───── TAB 3: ISSUE STOCK (INSTANT UPDATE GUARANTEED) ─────
 with tab3:
     st.subheader("Issue Medicine")
     if df.empty:
@@ -184,12 +178,12 @@ with tab3:
         df["option"] = (df["drug_name"] + " | " + df["batch_no"] +
                         " | Exp: " + df["expiry_date"].dt.strftime("%b %Y") +
                         " | Stock: " + df["quantity"].astype(str))
-        choice = st.selectbox("Select medicine", df["option"])
+        choice = st.selectbox("Select medicine", df["option"], key="issue_select")
         selected_row = df[df["option"] == choice].iloc[0]
 
         col1, col2 = st.columns(2)
         col1.write(f"**Available:** {selected_row.quantity}")
-        issue_qty = col2.number_input("Qty to issue", min_value=1, max_value=int(selected_row.quantity))
+        issue_qty = col2.number_input("Qty to issue", min_value=1, max_value=int(selected_row.quantity), key="issue_qty")
 
         patient = st.text_input("Patient name (optional)")
         remarks = st.text_input("Remarks")
@@ -201,16 +195,16 @@ with tab3:
             conn.commit()
             conn.close()
             add_transaction(selected_clinic, selected_row.id, "out", issue_qty, patient, remarks)
-            st.success(f"Issued {issue_qty} × {selected_row.drug_name}")
+            st.success(f"Issued {issue_qty} × {selected_row.drug_name} → New stock: {new_qty}")
             st.rerun()
 
 # ───── TAB 4: REPORTS ─────
 with tab4:
-    st.subheader("Export")
+    st.subheader("Export Stock")
     if not df.empty:
         csv = df.to_csv(index=False).encode()
-        st.download_button("Download current stock (CSV)", csv, "stock.csv", "text/csv")
+        st.download_button("Download current stock (CSV)", csv, "stock_report.csv", "text/csv")
     else:
-        st.info("No data yet")
+        st.info("No data to export yet")
 
 st.sidebar.caption("Clinic Inventory • Built with Streamlit")

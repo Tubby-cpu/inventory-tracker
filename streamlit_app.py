@@ -4,9 +4,27 @@ import sqlite3
 from datetime import datetime
 import hashlib
 
-# ====================== CONFIG (DB_PATH MUST COME FIRST) ======================
-DB_PATH = "inventory.db"  # ← This line MUST be here before any functions use it
-st.set_page_config(page_title="Clinics Inventory Manager", layout="wide")
+# ====================== CLEAN PROFESSIONAL DESIGN ======================
+st.set_page_config(page_title="Your Clinic Group • Inventory", layout="centered", page_icon="⚕️")
+
+# Custom CSS — modern, clinical, beautiful
+st.markdown("""
+<style>
+    .big-font {font-size: 50px !important; font-weight: bold; color: #0066cc; text-align: center;}
+    .medium-font {font-size: 22px !important; color: #555; text-align: center; margin-bottom: 40px;}
+    .login-box {max-width: 400px; margin: 0 auto; padding: 40px; background: white; 
+                border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1);}
+    .stButton>button {width: 100%; background: #0066cc; color: white; font-size: 18px; 
+                      padding: 12px; border-radius: 10px;}
+    .stButton>button:hover {background: #0052a3;}
+    header {visibility: hidden;}
+    .css-1d391kg {padding: 2rem 1rem;}
+    .css-1v0mbdj a {color: #0066cc;}
+    .footer {text-align: center; margin-top: 60px; color: #888; font-size: 14px;}
+</style>
+""", unsafe_allow_html=True)
+
+DB_PATH = "inventory.db"
 
 # ====================== USERS ======================
 USERS = {
@@ -19,87 +37,60 @@ USERS = {
     "admin": {"password": hashlib.sha256("admin123".encode()).hexdigest(), "role": "admin", "clinic": "All"},
 }
 
-# ====================== DATABASE ======================
+# ====================== DATABASE INIT ======================
 def init_db():
-    conn = sqlite3.connect(DB_PATH)  # ← Now DB_PATH is defined
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS medicines (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    clinic TEXT NOT NULL,
-                    drug_name TEXT NOT NULL,
-                    generic_name TEXT,
-                    strength TEXT,
-                    batch_no TEXT,
-                    expiry_date DATE,
-                    quantity INTEGER,
-                    low_stock_threshold INTEGER DEFAULT 20,
-                    date_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS transactions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    clinic TEXT,
-                    drug_id INTEGER,
-                    type TEXT,
-                    quantity INTEGER,
-                    patient_name TEXT,
-                    remarks TEXT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS medicines (...)''')  # your full table code
+    c.execute('''CREATE TABLE IF NOT EXISTS transactions (...)''')
     conn.commit()
     conn.close()
+init_db()
 
-init_db()  # ← Call it here, after DB_PATH is set
-
-# ====================== AUTH ======================
-def login():
-    if "user" not in st.session_state:
-        st.sidebar.title("Login")
-        username = st.sidebar.text_input("Username")
-        password = st.sidebar.text_input("Password", type="password")
-        if st.sidebar.button("Login"):
+# ====================== CENTERED LOGIN SCREEN ======================
+if "user" not in st.session_state:
+    st.markdown('<p class="big-font">Your Clinic Group</p>', unsafe_allow_html=True)
+    st.markdown('<p class="medium-font">Smart Pharmacy Inventory System</p>', unsafe_allow_html=True)
+    
+    with st.container():
+        st.markdown('<div class="login-box">', unsafe_allow_html=True)
+        st.markdown("### Secure Login")
+        username = st.text_input("Username", placeholder="e.g. capetown or admin")
+        password = st.text_input("Password", type="password", placeholder="Enter your password")
+        
+        if st.button("Login to Inventory"):
             hashed = hashlib.sha256(password.encode()).hexdigest()
             if username in USERS and USERS[username]["password"] == hashed:
                 st.session_state.user = username
                 st.session_state.role = USERS[username]["role"]
                 st.session_state.clinic = USERS[username]["clinic"]
+                st.success("Login successful! Loading...")
                 st.rerun()
             else:
-                st.sidebar.error("Wrong credentials")
-        st.stop()
+                st.error("Incorrect username or password")
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.markdown('<div class="footer">© 2025 Your Clinic Group • Professional Pharmacy Management</div>', unsafe_allow_html=True)
+    st.stop()
 
-login()
+# ====================== AFTER LOGIN — FULL APP ======================
 st.sidebar.success(f"Logged in: {st.session_state.user}")
 st.sidebar.write(f"**{st.session_state.clinic}**")
 if st.sidebar.button("Logout"):
     st.session_state.clear()
     st.rerun()
 
-# ====================== HELPERS ======================
-def get_df(clinic_filter=None):
-    conn = sqlite3.connect(DB_PATH)
-    if clinic_filter and clinic_filter != "All":
-        df = pd.read_sql_query("SELECT * FROM medicines WHERE clinic = ?", conn, params=(clinic_filter,))
-    else:
-        df = pd.read_sql_query("SELECT * FROM medicines", conn)
-    conn.close()
-    if not df.empty:
-        df["expiry_date"] = pd.to_datetime(df["expiry_date"])
-    return df
+# Title after login
+st.markdown('<p style="font-size: 40px; color: #0066cc; text-align: center; font-weight: bold;">Your Clinic Group</p>', unsafe_allow_html=True)
+st.markdown('<p style="text-align: center; color: #555; font-size: 20px;">Pharmacy Inventory • Live Across All Sites</p>', unsafe_allow_html=True)
 
-def add_transaction(clinic, drug_id, type_, qty, patient="", remarks=""):
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("INSERT INTO transactions (clinic, drug_id, type, quantity, patient_name, remarks) VALUES (?,?,?,?,?,?)",
-                 (clinic, drug_id, type_, qty, patient, remarks))
-    conn.commit()
-    conn.close()
-
-# ====================== MAIN ======================
-st.title("Clinic Inventory Pro")
-
+# Rest of your working code (clinic selector, tabs, etc.) goes here exactly as before
 role = st.session_state.role
 user_clinic = st.session_state.clinic
 
 if role == "admin":
     clinic_options = ["All", "Cape Town", "Sandton", "Marshall Town", "Gqberha", "Sandton 2", "Pretoria"]
-    selected_clinic = st.selectbox("View Clinic", clinic_options)
+    selected_clinic = st.selectbox("View Clinic", clinic_options, key="admin_select")
 else:
     selected_clinic = user_clinic
 
@@ -107,106 +98,9 @@ df = get_df("All" if (role == "admin" and selected_clinic == "All") else selecte
 
 tab1, tab2, tab3, tab4 = st.tabs(["Current Stock", "Receive Stock", "Issue Stock", "Reports"])
 
-# ───── TAB 1: CURRENT STOCK ─────
-with tab1:
-    st.subheader(f"Stock – {selected_clinic}")
-    if df.empty:
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Expired", 0); col2.metric("Near Expiry", 0); col3.metric("Low Stock", 0)
-        st.info("No medicines yet — go to 'Receive Stock' to add some")
-    else:
-        today = pd.to_datetime("today").normalize()
-        df["days_to_expiry"] = (df["expiry_date"] - today).dt.days
-        df["status"] = "normal"
-        df.loc[df["quantity"] <= df["low_stock_threshold"], "status"] = "low_stock"
-        df.loc[df["days_to_expiry"] <= 90, "status"] = "near_expiry"
-        df.loc[df["days_to_expiry"] <= 0, "status"] = "expired"
+# Paste your four working tab blocks here exactly as they are now
+# (Current Stock, Receive, Issue, Reports — no changes needed)
 
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Expired", len(df[df["status"] == "expired"]))
-        c2.metric("Near Expiry (<90 days)", len(df[df["status"] == "near_expiry"]))
-        c3.metric("Low Stock", len(df[df["status"] == "low_stock"]))
-
-        display = df[["drug_name", "generic_name", "strength", "batch_no", "expiry_date", "quantity", "low_stock_threshold"]].copy()
-        display["expiry_date"] = display["expiry_date"].dt.strftime("%Y-%m-%d")
-        status_list = df["status"].tolist()
-
-        def highlight_row(row):
-            status = status_list[row.name]
-            if status == "expired": return ["background: #ffcccc"] * len(row)
-            if status == "near_expiry": return ["background: #ffffcc"] * len(row)
-            if status == "low_stock": return ["background: #ffcc99"] * len(row)
-            return [""] * len(row)
-
-        st.dataframe(display.style.apply(highlight_row, axis=1), use_container_width=True)
-
-# ───── TAB 2: RECEIVE STOCK ─────
-with tab2:
-    st.subheader("Receive New Stock")
-    with st.form("receive"):
-        drug_name = st.text_input("Drug Name *")
-        generic = st.text_input("Generic Name (optional)")
-        strength = st.text_input("Strength e.g. 500mg")
-        batch = st.text_input("Batch Number *")
-        expiry = st.date_input("Expiry Date", min_value=datetime.today())
-        qty = st.number_input("Quantity", min_value=1)
-        threshold = st.number_input("Low-stock alert", value=20)
-        submitted = st.form_submit_button("Add Stock")
-        if submitted:
-            if not drug_name or not batch:
-                st.error("Drug name and batch number required")
-            else:
-                conn = sqlite3.connect(DB_PATH)
-                conn.execute("""INSERT INTO medicines 
-                    (clinic, drug_name, generic_name, strength, batch_no, expiry_date, quantity, low_stock_threshold)
-                    VALUES (?,?,?,?,?,?,?,?)""",
-                    (selected_clinic, drug_name, generic, strength, batch, expiry, qty, threshold))
-                drug_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-                conn.commit()
-                conn.close()
-                add_transaction(selected_clinic, drug_id, "in", qty, remarks=f"Received {batch}")
-                st.success(f"Added {qty} × {drug_name}")
-                st.balloons()
-                st.rerun()
-
-# ───── TAB 3: ISSUE STOCK ─────
-with tab3:
-    st.subheader("Issue Medicine")
-    if df.empty:
-        st.info("No stock available")
-    else:
-        df["option"] = (df["drug_name"] + " | " + df["batch_no"] +
-                        " | Exp: " + df["expiry_date"].dt.strftime("%b %Y") +
-                        " | Stock: " + df["quantity"].astype(str))
-        choice = st.selectbox("Select medicine", df["option"], key="issue_select")
-        row_idx = df[df["option"] == choice].index[0]
-        current_qty = int(df.loc[row_idx, "quantity"])
-        drug_id = int(df.loc[row_idx, "id"])
-
-        col1, col2 = st.columns(2)
-        col1.write(f"**Available:** {current_qty}")
-        issue_qty = col2.number_input("Qty to issue", min_value=1, max_value=current_qty, key="issue_qty")
-
-        patient = st.text_input("Patient name (optional)")
-        remarks = st.text_input("Remarks")
-
-        if st.button("Issue Medicine", type="primary"):
-            new_qty = current_qty - issue_qty
-            conn = sqlite3.connect(DB_PATH)
-            conn.execute("UPDATE medicines SET quantity = ? WHERE id = ?", (new_qty, drug_id))
-            conn.commit()
-            conn.close()
-            add_transaction(selected_clinic, drug_id, "out", issue_qty, patient, remarks)
-            st.success(f"Issued {issue_qty} → New stock: {new_qty}")
-            st.rerun()
-
-# ───── TAB 4: REPORTS ─────
-with tab4:
-    st.subheader("Export Stock")
-    if not df.empty:
-        csv = df.to_csv(index=False).encode()
-        st.download_button("Download current stock (CSV)", csv, "stock_report.csv", "text/csv")
-    else:
-        st.info("No data to export yet")
-
-st.sidebar.caption("Clinic Inventory • Built with Streamlit")
+# At the very end
+st.sidebar.markdown("---")
+st.sidebar.markdown("**Your Clinic Group** • 2025")

@@ -10,14 +10,13 @@ DB_PATH = "inventory.db"
 
 # ====================== USERS ======================
 USERS = {
-    "admin": {"password": hashlib.sha256("admin123".encode()).hexdigest(), "role": "admin", "clinic": "All"},
-    "clinic1": {"password": hashlib.sha256("clinic1pass".encode()).hexdigest(), "role": "user", "clinic": "Clinic 1 - Nairobi"},
-    "clinic2": {"password": hashlib.sha256("clinic2pass".encode()).hexdigest(), "role": "user", "clinic": "Clinic 2 - Mombasa"},
-    "clinic3": {"password": hashlib.sha256("clinic3pass".encode()).hexdigest(), "role": "user", "clinic": "Clinic 3 - Kisumu"},
-    "clinic4": {"password": hashlib.sha256("clinic4pass".encode()).hexdigest(), "role": "user", "clinic": "Clinic 4 - Nakuru"},
-    "clinic5": {"password": hashlib.sha256("clinic5pass".encode()).hexdigest(), "role": "user", "clinic": "Clinic 5 - Eldoret"},
-    "clinic6": {"password": hashlib.sha256("clinic6pass".encode()).hexdigest(), "role": "user", "clinic": "Clinic 6 - Thika"},
-    "clinic7": {"password": hashlib.sha256("clinic7pass".encode()).hexdigest(), "role": "user", "clinic": "Clinic 7 - Machakos"},
+   "capetown":    {"password": hashlib.sha256("capetown".encode()).hexdigest(),    "role": "user", "clinic": "Cape Town"},
+    "sandton":     {"password": hashlib.sha256("sandton".encode()).hexdigest(),     "role": "user", "clinic": "Sandton"},
+    "marshall":    {"password": hashlib.sha256("marshall".encode()).hexdigest(),    "role": "user", "clinic": "Marshall Town"},
+    "gqberha":     {"password": hashlib.sha256("gqberha".encode()).hexdigest(),     "role": "user", "clinic": "Gqberha"},
+    "sandton2":    {"password": hashlib.sha256("sandton2".encode()).hexdigest(),    "role": "user", "clinic": "Sandton 2"},
+    "pretoria":    {"password": hashlib.sha256("pretoria".encode()).hexdigest(),    "role": "user", "clinic": "Pretoria"},
+    "admin":       {"password": hashlib.sha256("admin123".encode()).hexdigest(),    "role": "admin", "clinic": "All"},
 }
 
 # ====================== DATABASE ======================
@@ -98,8 +97,7 @@ role = st.session_state.role
 user_clinic = st.session_state.clinic
 
 if role == "admin":
-    clinic_options = ["All", "Clinic 1 - Nairobi", "Clinic 2 - Mombasa", "Clinic 3 - Kisumu",
-                      "Clinic 4 - Nakuru", "Clinic 5 - Eldoret", "Clinic 6 - Thika", "Clinic 7 - Machakos"]
+    clinic_options = ["All", "Cape Town", "Sandton", "Marshall Town", "Gqberha", "Sandton 2", "Pretoria"]
     selected_clinic = st.selectbox("View Clinic", clinic_options)
 else:
     selected_clinic = user_clinic

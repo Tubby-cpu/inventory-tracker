@@ -206,13 +206,59 @@ with tab3:
             st.success(f"Issued {issue_qty} → New stock: {new_qty}")
             st.rerun()        # instant refresh
 
-# ───── TAB 4: REPORTS ─────
+# ───── TAB 4: FULL TRANSACTION REPORT (ISSUED + RECEIVED + PATIENT NAMES) ─────
 with tab4:
-    st.subheader("Export Stock")
-    if not df.empty:
-        csv = df.to_csv(index=False).encode()
-        st.download_button("Download current stock (CSV)", csv, "stock_report.csv", "text/csv")
+    st.subheader("Full Transaction History")
+
+    # Load all transactions for the selected clinic
+    conn = sqlite3.connect(DB_PATH)
+    query = """
+        SELECT t.timestamp, t.type, m.drug_name, m.batch_no, t.quantity, 
+               t.patient_name, t.remarks, t.clinic
+        FROM transactions t
+        JOIN medicines m ON t.drug_id = m.id
+        WHERE t.clinic = ?
+        ORDER BY t.timestamp DESC
+    """
+    history = pd.read_sql_query(query, conn, params=(selected_clinic,))
+    conn.close()
+
+    if history.empty:
+        st.info("No transactions yet. Start receiving and issuing stock!")
     else:
-        st.info("No data to export yet")
+        # Clean up display
+        history["timestamp"] = pd.to_datetime(history["timestamp"]).dt.strftime("%Y-%m-%d %H:%M")
+        history["type"] = history["type"].map({"in": "RECEIVED", "out": "ISSUED"})
+        history.rename(columns={
+            "timestamp": "Date & Time",
+            "type": "Action",
+            "drug_name": "Medicine",
+            "batch_no": "Batch",
+            "quantity": "Qty",
+            "patient_name": "Patient",
+            "remarks": "Remarks",
+            "clinic": "Clinic"
+        }, inplace=True)
+
+        # Reorder columns
+        display_history = history[["Date & Time", "Action", "Medicine", "Batch", "Qty", "Patient", "Remarks"]]
+
+        st.dataframe(display_history, use_container_width=True)
+
+        # Export button
+        csv = display_history.to_csv(index=False).encode()
+        st.download_button(
+            "Download Full Report (CSV)",
+            csv,
+            f"transaction_report_{selected_clinic.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.csv",
+            "text/csv"
+        )
+
+        # Quick stats
+        st.markdown("---")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Received", history[history["Action"] == "RECEIVED"]["Qty"].sum())
+        col2.metric("Total Issued", history[history["Action"] == "ISSUED"]["Qty"].sum())
+        col3.metric("Total Transactions", len(history))
 
 st.sidebar.caption("Clinic Inventory • Built with Streamlit")

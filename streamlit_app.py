@@ -4,9 +4,43 @@ import sqlite3
 from datetime import datetime
 import hashlib
 
-# ====================== CONFIG ======================
-st.set_page_config(page_title="Clinics Inventory Manager", layout="wide")
-DB_PATH = "inventory.db"
+# ====================== AT THE VERY TOP (after imports) ======================
+# Replace your current st.set_page_config with this upgraded version
+st.set_page_config(
+    page_title="Your Clinic Group • Inventory Pro",
+    page_icon="⚕️",
+    layout="wide",
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': 'https://www.yourwebsite.co.za',
+        'Report a bug': 'mailto:your.email@domain.com',
+        'About': "# Your Clinic Group Inventory System\nProfessional pharmacy management • Built in-house 2025"
+    }
+)
+
+# Add this CSS for a clean, modern look (paste right after st.set_page_config)
+st.markdown("""
+<style>
+    .css-1d391kg {padding-top: 1rem; padding-bottom: 1rem;}
+    .css-1v0mbdj {font-size: 1.1rem !important;}
+    .stButton>button {background-color: #0066cc; color: white; border-radius: 8px; padding: 0.5rem 1rem;}
+    .stButton>button:hover {background-color: #0052a3;}
+    .stSuccess {background-color: #d4edda; border-color: #c3e6cb; color: #155724;}
+    header {visibility: hidden;}  /* hides the default Streamlit header */
+    .css-18e3th9 {padding-top: 1rem;}
+    .css-1y0t9h1 {font-family: 'Segoe UI', sans-serif;}
+    h1 {color: #0066cc; text-align: center;}
+    .stTabs [data-baseweb="tab"] {font-size: 1.1rem; font-weight: 600;}
+</style>
+""", unsafe_allow_html=True)
+
+# ====================== REPLACE YOUR CURRENT st.title LINE ======================
+st.markdown("""
+<div style="text-align: center; padding: 2rem 0;">
+    <h1 style="color: #0066cc; margin:0;">Your Clinic Group</h1>
+    <p style="color: #555; font-size: 1.3rem; margin:5px;">Smart Pharmacy Inventory • Live Across All Sites</p>
+</div>
+""", unsafe_allow_html=True)
 
 # ====================== USERS ======================
 USERS = {

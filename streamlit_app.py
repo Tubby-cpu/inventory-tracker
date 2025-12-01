@@ -169,34 +169,42 @@ with tab2:
                 st.balloons()
                 st.rerun()
 
-# ───── TAB 3: ISSUE STOCK (INSTANT UPDATE GUARANTEED) ─────
+# ——— TAB 3: ISSUE STOCK – 100 % WORKING INSTANT UPDATE ———
 with tab3:
     st.subheader("Issue Medicine")
     if df.empty:
         st.info("No stock available")
     else:
+        # Build the dropdown options
         df["option"] = (df["drug_name"] + " | " + df["batch_no"] +
                         " | Exp: " + df["expiry_date"].dt.strftime("%b %Y") +
                         " | Stock: " + df["quantity"].astype(str))
         choice = st.selectbox("Select medicine", df["option"], key="issue_select")
-        selected_row = df[df["option"] == choice].iloc[0]
+
+        # Get the actual row index in df (this is the key!)
+        row_idx = df[df["option"] == choice].index[0]
+        current_qty = int(df.loc[row_idx, "quantity"])
+        drug_id = int(df.loc[row_idx, "id"])
 
         col1, col2 = st.columns(2)
-        col1.write(f"**Available:** {selected_row.quantity}")
-        issue_qty = col2.number_input("Qty to issue", min_value=1, max_value=int(selected_row.quantity), key="issue_qty")
+        col1.write(f"**Available:** {current_qty}")
+        issue_qty = col2.number_input("Qty to issue", min_value=1, max_value=current_qty, key="issue_qty")
 
         patient = st.text_input("Patient name (optional)")
         remarks = st.text_input("Remarks")
 
         if st.button("Issue Medicine", type="primary"):
-            new_qty = selected_row.quantity - issue_qty
+            new_qty = current_qty - issue_qty
+
+            # Direct database update using the real ID
             conn = sqlite3.connect(DB_PATH)
-            conn.execute("UPDATE medicines SET quantity = ? WHERE id = ?", (new_qty, selected_row.id))
+            conn.execute("UPDATE medicines SET quantity = ? WHERE id = ?", (new_qty, drug_id))
             conn.commit()
             conn.close()
-            add_transaction(selected_clinic, selected_row.id, "out", issue_qty, patient, remarks)
-            st.success(f"Issued {issue_qty} × {selected_row.drug_name} → New stock: {new_qty}")
-            st.rerun()
+
+            add_transaction(selected_clinic, drug_id, "out", issue_qty, patient, remarks)
+            st.success(f"Issued {issue_qty} → New stock: {new_qty}")
+            st.rerun()        # instant refresh
 
 # ───── TAB 4: REPORTS ─────
 with tab4:

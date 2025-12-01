@@ -4,43 +4,9 @@ import sqlite3
 from datetime import datetime
 import hashlib
 
-# ====================== AT THE VERY TOP (after imports) ======================
-# Replace your current st.set_page_config with this upgraded version
-st.set_page_config(
-    page_title="Your Clinic Group • Inventory Pro",
-    page_icon="⚕️",
-    layout="wide",
-    initial_sidebar_state="expanded",
-    menu_items={
-        'Get Help': 'https://www.yourwebsite.co.za',
-        'Report a bug': 'mailto:your.email@domain.com',
-        'About': "# Your Clinic Group Inventory System\nProfessional pharmacy management • Built in-house 2025"
-    }
-)
-
-# Add this CSS for a clean, modern look (paste right after st.set_page_config)
-st.markdown("""
-<style>
-    .css-1d391kg {padding-top: 1rem; padding-bottom: 1rem;}
-    .css-1v0mbdj {font-size: 1.1rem !important;}
-    .stButton>button {background-color: #0066cc; color: white; border-radius: 8px; padding: 0.5rem 1rem;}
-    .stButton>button:hover {background-color: #0052a3;}
-    .stSuccess {background-color: #d4edda; border-color: #c3e6cb; color: #155724;}
-    header {visibility: hidden;}  /* hides the default Streamlit header */
-    .css-18e3th9 {padding-top: 1rem;}
-    .css-1y0t9h1 {font-family: 'Segoe UI', sans-serif;}
-    h1 {color: #0066cc; text-align: center;}
-    .stTabs [data-baseweb="tab"] {font-size: 1.1rem; font-weight: 600;}
-</style>
-""", unsafe_allow_html=True)
-
-# ====================== REPLACE YOUR CURRENT st.title LINE ======================
-st.markdown("""
-<div style="text-align: center; padding: 2rem 0;">
-    <h1 style="color: #0066cc; margin:0;">Your Clinic Group</h1>
-    <p style="color: #555; font-size: 1.3rem; margin:5px;">Smart Pharmacy Inventory • Live Across All Sites</p>
-</div>
-""", unsafe_allow_html=True)
+# ====================== CONFIG (DB_PATH MUST COME FIRST) ======================
+DB_PATH = "inventory.db"  # ← This line MUST be here before any functions use it
+st.set_page_config(page_title="Clinics Inventory Manager", layout="wide")
 
 # ====================== USERS ======================
 USERS = {
@@ -55,7 +21,7 @@ USERS = {
 
 # ====================== DATABASE ======================
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH)  # ← Now DB_PATH is defined
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS medicines (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -79,7 +45,8 @@ def init_db():
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
     conn.commit()
     conn.close()
-init_db()
+
+init_db()  # ← Call it here, after DB_PATH is set
 
 # ====================== AUTH ======================
 def login():
@@ -105,7 +72,7 @@ if st.sidebar.button("Logout"):
     st.session_state.clear()
     st.rerun()
 
-# ====================== ALWAYS FRESH DATA ======================
+# ====================== HELPERS ======================
 def get_df(clinic_filter=None):
     conn = sqlite3.connect(DB_PATH)
     if clinic_filter and clinic_filter != "All":
@@ -136,7 +103,6 @@ if role == "admin":
 else:
     selected_clinic = user_clinic
 
-# This line forces fresh data every single time
 df = get_df("All" if (role == "admin" and selected_clinic == "All") else selected_clinic)
 
 tab1, tab2, tab3, tab4 = st.tabs(["Current Stock", "Receive Stock", "Issue Stock", "Reports"])
@@ -203,19 +169,16 @@ with tab2:
                 st.balloons()
                 st.rerun()
 
-# ——— TAB 3: ISSUE STOCK – 100 % WORKING INSTANT UPDATE ———
+# ───── TAB 3: ISSUE STOCK ─────
 with tab3:
     st.subheader("Issue Medicine")
     if df.empty:
         st.info("No stock available")
     else:
-        # Build the dropdown options
         df["option"] = (df["drug_name"] + " | " + df["batch_no"] +
                         " | Exp: " + df["expiry_date"].dt.strftime("%b %Y") +
                         " | Stock: " + df["quantity"].astype(str))
         choice = st.selectbox("Select medicine", df["option"], key="issue_select")
-
-        # Get the actual row index in df (this is the key!)
         row_idx = df[df["option"] == choice].index[0]
         current_qty = int(df.loc[row_idx, "quantity"])
         drug_id = int(df.loc[row_idx, "id"])
@@ -229,70 +192,21 @@ with tab3:
 
         if st.button("Issue Medicine", type="primary"):
             new_qty = current_qty - issue_qty
-
-            # Direct database update using the real ID
             conn = sqlite3.connect(DB_PATH)
             conn.execute("UPDATE medicines SET quantity = ? WHERE id = ?", (new_qty, drug_id))
             conn.commit()
             conn.close()
-
             add_transaction(selected_clinic, drug_id, "out", issue_qty, patient, remarks)
             st.success(f"Issued {issue_qty} → New stock: {new_qty}")
-            st.rerun()        # instant refresh
+            st.rerun()
 
-# ───── TAB 4: FULL TRANSACTION REPORT (ISSUED + RECEIVED + PATIENT NAMES) ─────
+# ───── TAB 4: REPORTS ─────
 with tab4:
-    st.subheader("Full Transaction History")
-
-    # Load all transactions for the selected clinic
-    conn = sqlite3.connect(DB_PATH)
-    query = """
-        SELECT t.timestamp, t.type, m.drug_name, m.batch_no, t.quantity, 
-               t.patient_name, t.remarks, t.clinic
-        FROM transactions t
-        JOIN medicines m ON t.drug_id = m.id
-        WHERE t.clinic = ?
-        ORDER BY t.timestamp DESC
-    """
-    history = pd.read_sql_query(query, conn, params=(selected_clinic,))
-    conn.close()
-
-    if history.empty:
-        st.info("No transactions yet. Start receiving and issuing stock!")
+    st.subheader("Export Stock")
+    if not df.empty:
+        csv = df.to_csv(index=False).encode()
+        st.download_button("Download current stock (CSV)", csv, "stock_report.csv", "text/csv")
     else:
-        # Clean up display
-        history["timestamp"] = pd.to_datetime(history["timestamp"]).dt.strftime("%Y-%m-%d %H:%M")
-        history["type"] = history["type"].map({"in": "RECEIVED", "out": "ISSUED"})
-        history.rename(columns={
-            "timestamp": "Date & Time",
-            "type": "Action",
-            "drug_name": "Medicine",
-            "batch_no": "Batch",
-            "quantity": "Qty",
-            "patient_name": "Patient",
-            "remarks": "Remarks",
-            "clinic": "Clinic"
-        }, inplace=True)
-
-        # Reorder columns
-        display_history = history[["Date & Time", "Action", "Medicine", "Batch", "Qty", "Patient", "Remarks"]]
-
-        st.dataframe(display_history, use_container_width=True)
-
-        # Export button
-        csv = display_history.to_csv(index=False).encode()
-        st.download_button(
-            "Download Full Report (CSV)",
-            csv,
-            f"transaction_report_{selected_clinic.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.csv",
-            "text/csv"
-        )
-
-        # Quick stats
-        st.markdown("---")
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total Received", history[history["Action"] == "RECEIVED"]["Qty"].sum())
-        col2.metric("Total Issued", history[history["Action"] == "ISSUED"]["Qty"].sum())
-        col3.metric("Total Transactions", len(history))
+        st.info("No data to export yet")
 
 st.sidebar.caption("Clinic Inventory • Built with Streamlit")

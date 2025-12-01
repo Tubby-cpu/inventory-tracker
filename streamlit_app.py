@@ -5,7 +5,7 @@ from datetime import datetime
 import hashlib
 
 # ====================== CONFIG ======================
-st.set_page_config(page_title="Clinic Inventory Pro", layout="wide")
+st.set_page_config(page_title="Clinics Inventory Manager", layout="wide")
 DB_PATH = "inventory.db"
 
 # ====================== USERS ======================

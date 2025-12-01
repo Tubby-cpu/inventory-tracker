@@ -7,7 +7,6 @@ import hashlib
 # ====================== PROFESSIONAL DESIGN ======================
 st.set_page_config(page_title="Your Clinic Group • Inventory", layout="centered", page_icon="Cross")
 
-# Beautiful clinical styling
 st.markdown("""
 <style>
     .big-title {font-size: 48px !important; font-weight: bold; color: #0066cc; text-align: center; margin-bottom: 0px;}
@@ -18,9 +17,7 @@ st.markdown("""
                       padding: 14px; border-radius: 12px; font-weight: bold;}
     .stButton>button:hover {background: #0052a3;}
     header {visibility: hidden;}
-    .css-1d391kg {padding: 1rem;}
     .footer {text-align: center; margin-top: 80px; color: #888; font-size: 15px;}
-    .report-table {font-size: 16px;}
     .stTabs [data-baseweb="tab"] {font-size: 18px; font-weight: 600;}
 </style>
 """, unsafe_allow_html=True)
@@ -58,7 +55,7 @@ init_db()
 # ====================== CENTERED LOGIN ======================
 if "user" not in st.session_state:
     st.markdown('<p class="big-title">Your Clinic Group</p>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Smart Pharmacy Inventory • Live Across All Sites</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Smart Pharmacy Inventory System</p>', unsafe_allow_html=True)
     
     with st.container():
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
@@ -80,11 +77,10 @@ if "user" not in st.session_state:
     st.stop()
 
 # ====================== AFTER LOGIN — FULL APP ======================
-st.set_page_config(layout="wide")  # Switch to wide after login
+st.set_page_config(layout="wide")
 st.markdown('<p style="font-size: 42px; color: #0066cc; text-align: center; font-weight: bold;">Your Clinic Group</p>', unsafe_allow_html=True)
-st.markdown('<p style="text-align: center; color: #555; font-size: 20px; margin-bottom: 30px;">Pharmacy Inventory System • Live Across All Sites</p>', unsafe_allow_html=True)
+st.markdown('<p style="text-align: center; color: #555; font-size: 20px; margin-bottom: 30px;">Pharmacy Inventory • Live Across All Sites</p>', unsafe_allow_html=True)
 
-# Sidebar
 st.sidebar.success(f"Welcome: {st.session_state.user}")
 st.sidebar.write(f"**{st.session_state.clinic}**")
 if st.sidebar.button("Logout"):
@@ -110,21 +106,111 @@ def add_transaction(clinic, drug_id, type_, qty, patient="", remarks=""):
     conn.commit()
     conn.close()
 
-# Clinic selector
 role = st.session_state.role
 user_clinic = st.session_state.clinic
 if role == "admin":
     clinic_options = ["All", "Cape Town", "Sandton", "Marshall Town", "Gqberha", "Sandton 2", "Pretoria"]
-    selected_clinic = st.selectbox("View Clinic", clinic_options, key="admin_view")
+    selected_clinic = st.selectbox("View Clinic", clinic_options)
 else:
     selected_clinic = user_clinic
 
 df = get_df("All" if (role == "admin" and selected_clinic == "All") else selected_clinic)
 tab1, tab2, tab3, tab4 = st.tabs(["Current Stock", "Receive Stock", "Issue Stock", "Full Report"])
 
-# Keep your existing working tabs 1–3 here (Current Stock, Receive, Issue) — they are perfect
+# TAB 1: CURRENT STOCK
+with tab1:
+    st.subheader(f"Stock – {selected_clinic}")
+    if df.empty:
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Expired", 0); col2.metric("Near Expiry", 0); col3.metric("Low Stock", 0)
+        st.info("No medicines yet — go to 'Receive Stock' to add some")
+    else:
+        today = pd.to_datetime("today").normalize()
+        df["days_to_expiry"] = (df["expiry_date"] - today).dt.days
+        df["status"] = "normal"
+        df.loc[df["quantity"] <= df["low_stock_threshold"], "status"] = "low_stock"
+        df.loc[df["days_to_expiry"] <= 90, "status"] = "near_expiry"
+        df.loc[df["days_to_expiry"] <= 0, "status"] = "expired"
 
-# ====================== TAB 4: FULL REPORT WITH PATIENTS & REMARKS ======================
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Expired", len(df[df["status"] == "expired"]))
+        c2.metric("Near Expiry (<90 days)", len(df[df["status"] == "near_expiry"]))
+        c3.metric("Low Stock", len(df[df["status"] == "low_stock"]))
+
+        display = df[["drug_name", "generic_name", "strength", "batch_no", "expiry_date", "quantity", "low_stock_threshold"]].copy()
+        display["expiry_date"] = display["expiry_date"].dt.strftime("%Y-%m-%d")
+        status_list = df["status"].tolist()
+
+        def highlight_row(row):
+            status = status_list[row.name]
+            if status == "expired": return ["background: #ffcccc"] * len(row)
+            if status == "near_expiry": return ["background: #ffffcc"] * len(row)
+            if status == "low_stock": return ["background: #ffcc99"] * len(row)
+            return [""] * len(row)
+
+        st.dataframe(display.style.apply(highlight_row, axis=1), use_container_width=True)
+
+# TAB 2: RECEIVE STOCK
+with tab2:
+    st.subheader("Receive New Stock")
+    with st.form("receive"):
+        drug_name = st.text_input("Drug Name *")
+        generic = st.text_input("Generic Name (optional)")
+        strength = st.text_input("Strength e.g. 500mg")
+        batch = st.text_input("Batch Number *")
+        expiry = st.date_input("Expiry Date", min_value=datetime.today())
+        qty = st.number_input("Quantity", min_value=1)
+        threshold = st.number_input("Low-stock alert", value=20)
+        submitted = st.form_submit_button("Add Stock")
+        if submitted:
+            if not drug_name or not batch:
+                st.error("Drug name and batch number required")
+            else:
+                conn = sqlite3.connect(DB_PATH)
+                conn.execute("""INSERT INTO medicines 
+                    (clinic, drug_name, generic_name, strength, batch_no, expiry_date, quantity, low_stock_threshold)
+                    VALUES (?,?,?,?,?,?,?,?)""",
+                    (selected_clinic, drug_name, generic, strength, batch, expiry, qty, threshold))
+                drug_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+                conn.commit()
+                conn.close()
+                add_transaction(selected_clinic, drug_id, "in", qty, remarks=f"Received {batch}")
+                st.success(f"Added {qty} × {drug_name}")
+                st.balloons()
+                st.rerun()
+
+# TAB 3: ISSUE STOCK
+with tab3:
+    st.subheader("Issue Medicine")
+    if df.empty:
+        st.info("No stock available")
+    else:
+        df["option"] = (df["drug_name"] + " | " + df["batch_no"] +
+                        " | Exp: " + df["expiry_date"].dt.strftime("%b %Y") +
+                        " | Stock: " + df["quantity"].astype(str))
+        choice = st.selectbox("Select medicine", df["option"])
+        row_idx = df[df["option"] == choice].index[0]
+        current_qty = int(df.loc[row_idx, "quantity"])
+        drug_id = int(df.loc[row_idx, "id"])
+
+        col1, col2 = st.columns(2)
+        col1.write(f"**Available:** {current_qty}")
+        issue_qty = col2.number_input("Qty to issue", min_value=1, max_value=current_qty)
+
+        patient = st.text_input("Patient name (optional)")
+        remarks = st.text_input("Remarks")
+
+        if st.button("Issue Medicine", type="primary"):
+            new_qty = current_qty - issue_qty
+            conn = sqlite3.connect(DB_PATH)
+            conn.execute("UPDATE medicines SET quantity = ? WHERE id = ?", (new_qty, drug_id))
+            conn.commit()
+            conn.close()
+            add_transaction(selected_clinic, drug_id, "out", issue_qty, patient, remarks)
+            st.success(f"Issued {issue_qty} → New stock: {new_qty}")
+            st.rerun()
+
+# TAB 4: FULL REPORT WITH PATIENTS & REMARKS
 with tab4:
     st.subheader(f"Transaction History — {selected_clinic}")
     conn = sqlite3.connect(DB_PATH)
@@ -138,7 +224,7 @@ with tab4:
     conn.close()
 
     if history.empty:
-        st.info("No transactions recorded yet.")
+        st.info("No transactions yet.")
     else:
         history["timestamp"] = pd.to_datetime(history["timestamp"]).dt.strftime("%Y-%m-%d %H:%M")
         history["type"] = history["type"].map({"in": "Received", "out": "Issued"})
